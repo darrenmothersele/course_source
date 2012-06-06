@@ -1,0 +1,25 @@
+<?php 
+
+function course_source_admin_menu() {
+  $items = array();
+  $items['admin/config/services/course-source/courses'] = array(
+    'title' => 'List courses',
+    'page callback' => 'course_source_admin_list_courses_page',
+    'access arguments' => array('administer course source'),
+    'file' => 'course_source_admin.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -2,
+  );
+  $items['admin/config/services/course-source/enrol'] = array(
+    'title' => 'Enrol user',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('_course_source_admin_enrol_form'),
+    'access arguments' => array('administer course source'),
+    'file' => 'course_source_admin.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -1,
+  );
+  return $items;
+}
+
+

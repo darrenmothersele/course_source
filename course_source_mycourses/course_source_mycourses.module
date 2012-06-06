@@ -1,0 +1,98 @@
+<?php
+
+function course_source_mycourses_permission() {
+  return array(
+    'access mycourses page' => array(
+      'title' => t('Access My Courses page'),
+      'description' => t('Display a page for this user that lists the courses they are enrolled in.'),
+    ),
+  );
+}
+
+function course_source_mycourses_theme() {
+  return array(
+    'course_source_course_page' => array(
+      'variables' => array('href' => NULL),
+      'template' => 'course_source_course_page',
+    ),
+    'course_source_mycourses' => array(
+      'variables' => array('courses' => NULL),
+    ),
+  );
+}
+
+function theme_course_source_mycourses($variables) {
+  $table = array(
+    'header' => array('Course Title', 'Expiry Date', 'Last Accessed Date', 'Complete Status'),
+    'rows' => array(),
+  );
+  if (!empty($variables['courses'])) {
+    foreach ($variables['courses'] as $course) {
+      if ($course['CompleteStatus'] == 1) {
+        $tickorcross = '<div class="tick"></div>';
+      } else {
+        $tickorcross = '<div class="cross"></div>';
+      }
+      $table['rows'][] = array(
+        l($course['CourseTitle'], 'course-source/'. urlencode($course['CourseTitle']) .'/'. urlencode($course['LaunchURL'])),
+        '<div class="coursedate">'. $course['EndDate'] .'</div>', '<div class="coursedate">'. $course['LastAccessedDate'] .'</div>',
+        $tickorcross,
+      );
+    }
+  }
+  return theme('table', $table);
+}
+
+function course_source_mycourses_menu() {
+  $items = array();
+  $items['mycourses'] = array(
+    'title' => t('My Courses'),
+    'description' => t('The courses I am enrolled in'),
+    'page callback' => '_course_source_mycourses_page',
+    'access arguments' => array('access mycourses page'),
+    'menu_name' => 'user-menu',
+  );
+  $items['course-source'] = array(
+    'title' => t('Course'),
+    'page callback' => '_course_source_course_page',
+    'access arguments' => array('access mycourses page'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+
+function _course_source_mycourses_page() {
+  global $user;
+  return theme('course_source_mycourses', 
+    array('courses' => course_source_api_call('getMyCourses', array($user->name, ip_address()))));
+}
+
+function _course_source_course_page($title, $courselink) {
+  drupal_set_title(urldecode($title));
+  global $user;
+  drupal_set_breadcrumb(array(
+    l('Home', NULL), l(check_plain($user->name), 'user/'. $user->uid),
+    l('My Courses', 'mycourses')
+  ));
+  return theme('course_source_course_page', array('href' => 'http://'. urldecode($courselink)));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,9 @@
+name = Course Source MyCourses
+package = Course Source
+description = Provides a MyCourses page for each user listing their enrollments.
+dependencies[] = course_source_api
+
+core = 7.x
+
+version = 7.x-1.0-dev
+

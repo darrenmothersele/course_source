@@ -1,0 +1,9 @@
+name = Course Source Admin
+package = Course Source
+description = Provides extra administration options for Course Source integration, including tools for adding enrollments for users.
+dependencies[] = course_source_api
+
+core = 7.x
+
+version = 7.x-1.0-dev
+

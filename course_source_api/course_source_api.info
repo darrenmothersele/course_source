@@ -1,0 +1,9 @@
+name = Course Source API
+package = Course Source
+description = Main API functions for connecting to Course Source LMS
+configure = admin/config/services/course-source/settings
+
+core = 7.x
+
+version = 7.x-1.0-dev
+
