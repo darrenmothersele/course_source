@@ -108,11 +108,27 @@ function _course_source_api_get_connection() {
  * @param array $args
  *   An array of arguments to pass to the API method. SiteID and SiteKey are 
  *   added automatically.
+ * @param boolean $cache
+ *   Set cache to TRUE to use value from cache rather than recalling the API.
+ *   set this to FALSE to force the cache to reset and call the API for new
+ *   values. The default value is FALSE, i.e. if this value is not provided
+ *   the API is always called to fetch new values.
  */
-function course_source_api_call($op, $args = array()) {
+function course_source_api_call($op, $args = array(), $cache = FALSE) {
 	if (variable_get('course_source_debug', FALSE)) {
 		watchdog('course_source_api', 'Calling API method %op with: %args',
 		  array('%op' => $op, '%args' => print_r($args, TRUE)));
+	}
+	$cache_key = "course_source_{$op}_" . md5(serialize($args));
+	if ($cache) {
+		$cache_data = cache_get($cache_key);
+		if (!empty($cache_data) && isset($cache_data->data)) {
+		  if (variable_get('course_source_debug', FALSE)) {
+			  watchdog('course_source_api', 'API result fetched from cache: %msg',
+			    array('%msg' => print_r($cache_data->data, TRUE)));
+		  }
+			return $cache_data->data;
+		} 
 	}
 	$client = _course_source_api_get_connection();
   $keys = array(variable_get('course_source_siteid', ''), 
@@ -130,6 +146,7 @@ function course_source_api_call($op, $args = array()) {
 		  watchdog('course_source_api', 'API responded with: %msg',
 		    array('%msg' => print_r($response, TRUE)));
 	  }
+	  cache_set($cache_key, $response);
 	  return $response;
 	} catch (Exception $e) {
 		$msg = $e->getMessage();
@@ -139,80 +156,11 @@ function course_source_api_call($op, $args = array()) {
 	}
 }
  
-
-function course_source_api_call_old_version($op, $args = array()) {
-  // Log the API call if debugging is enabled
-  if (variable_get('course_source_debug', FALSE)) {
-    watchdog('course_source_api', 'Calling (old) API method %op with: %args', 
-      array('%op' => $op, '%args' => print_r($args, TRUE)));
-  }
-
-  // Load the cached web service connection
-  $client = _course_source_api_get_connection();
-  
-  // Load the SiteID and SiteKey
-  $keys = array(variable_get('course_source_siteid', ''), 
-    variable_get('course_source_sitekey', ''));
-  
-  // Merge the SiteID and SiteKey into the argument array
-  $ops_without_userid = array('validateLogin', 'getAllCoursesAndDurations', 'getAllCourses', 'getDurations');
-  if (in_array($op, $ops_without_userid)) {
-    $args = array_merge($keys, $args);
-  } else {
-    $userid = array_shift($args);
-    $args = array_merge(array($userid), $keys, $args);
-  } 
-  
-  // Perform the web service call 
-  try {
-    $response = call_user_func_array(array($client, $op), $args);
-	  // Log the API response if debuging is enabled
-	  if (variable_get('course_source_debug', FALSE)) {
-	    watchdog('course_source_api', 'API responded with: %response', 
-	      array('%response' => print_r($response, TRUE)));
-	  }
-  } catch (Exception $e) {
-	  if (variable_get('course_source_debug', FALSE)) {
-	    //drupal_set_message("Course Source API error {$response['faultcode']}: {$response['faultstring']}", 'error');
-	    drupal_set_message("Course Source API error ". print_r($response, TRUE), 'error');
-    }
-	    //watchdog('course_source_api', 
-	    //  'Course Source API fault %code: %msg', 
-	    //  array('%code' => $response['faultcode'], '%msg' => $response['faultstring']),
-	    //  WATCHDOG_ERROR);
-	    //return FALSE;
-	    watchdog('course_source_api', 
-	      "Course Source API error ". print_r($response, TRUE), 
-	      array(),
-	      WATCHDOG_ERROR);
-	    return FALSE;
-
-  } 
-  
-  // Deal with error messages and return response
-  //if (isset($response['faultcode'])) {
-  //}
-  //if (isset($response['ReturnStatus'])) { 
-  //  if (!$response['ReturnStatus']) {
-  //    watchdog('course_source_api', 
-  // /     'Course Source API error: %error', array('%error' => $response['ErrorMessage']), 
-  //    WATCHDOG_ERROR);
-  //  }
-  //  return ($response['ReturnStatus']) ? TRUE : FALSE;
-  //} else {
-    if (empty($response)) {
-      return array();
-    }
-    if (!isset($response['item'])) {
-      return $response;
-    }
-    // Turn single results back into an array with one item
-    if (array_key_exists(0, $response['item'])) {
-      return $response['item'];
-    }
-    return array($response['item']);
-  //}
+function course_source_api_cache_clear($op, $args = array()) {
+  $cache_key = "course_source_{$op}_" . md5(serialize($args));
+	cache_clear_all($cache_key, 'cache');
 }
+
 
 function course_source_api_user_presave(&$edit, $account, $category) {
   if ($edit['name'] != $account->name) {
@@ -222,10 +170,7 @@ function course_source_api_user_presave(&$edit, $account, $category) {
 }
 function course_source_api_user_insert(&$edit, $account, $category) {
   if (variable_get('course_source_user_sync', TRUE)) {
-
-//KB!!!
-course_source_api_call('addUser', _course_source_api_map_user($account));
-
+    course_source_api_call('addUser', _course_source_api_map_user($account));
   }
 } 
 function course_source_api_user_update(&$edit, $account, $category) {
@@ -234,40 +179,7 @@ function course_source_api_user_update(&$edit, $account, $category) {
   }
 } 
 
-function _course_source_api_map_user_ORIGINAL($account) {
-//KB! function no longer used (modified below)
-/*
-  return array(
-    $account->name,
-    _course_source_api_map_user_field($account, 'firstname'),
-    _course_source_api_map_user_field($account, 'firstname'),
-    $account->mail,
-    $groupname = variable_get('course_source_default_group_name', 'Students'),
-    $account->status,
-  );
-*/
-}
-
-function _course_source_api_map_user_IGNORES_DEFAULT($account) {
-//KB! added the user field mapping but lost the default for when drupal users are added with no groupname
-// replaced this
-//  $groupname = variable_get('course_source_default_group_name', 'Students'),
-// with this
-//  _course_source_api_map_user_field($account, 'groupname'),
-/*
-  return array(
-    $account->name,
-    _course_source_api_map_user_field($account, 'firstname'),
-    _course_source_api_map_user_field($account, 'lastname'),
-    $account->mail,
-    _course_source_api_map_user_field($account, 'groupname'),
-    $account->status,
-  );
-*/
-}
-
 function _course_source_api_map_user($account) {
-//KB! attempting to re-introduce the default from the config settings page as the function above fixes the groupname sync but lost the default
   $groupname = _course_source_api_map_user_field($account, 'groupname');
   if (!$groupname) {
 	  $groupname = variable_get('course_source_default_group_name', 'Students');
@@ -307,28 +219,22 @@ function course_source_api_get_courses() {
 }
 
 function course_source_api_form_alter(&$form, &$form_state, $form_id) {
-	//drupal_set_message($form_id);
 	if ($form_id == 'user_login_block') {
-		$form['#validate'] = array('user_login_name_validate', 
-		  /*'user_login_authenticate_validate',*/ '_course_source_login_validate', 'user_login_final_validate');
-		//$form['#submit'] = array('_course_source_login_submit');
+		$form['#validate'] = array(
+		  'user_login_name_validate', 
+		  '_course_source_login_validate', 
+		  'user_login_final_validate',
+		);
 	}
 	if ($form_id == 'user_profile_form') {
 		$form['#submit'][] = '_course_source_profile_alter_submit';
 	}
-//KB!
-//drupal_set_message('<pre>FORM_ALTER:'. print_r($form, TRUE) .'</pre>');
 }
 
 function _course_source_profile_alter_submit($form, &$form_state) {
-  //drupal_set_message('<pre>'. print_r($form_state['values'], TRUE) .'</pre>');
   $new_pass = $form_state['values']['pass'];
   $email = $form_state['values']['mail'];
   $account = course_source_api_call('getUser', array($form_state['values']['name']));
-
-//KB!
-//drupal_set_message('<pre>ALTER_SUBMIT:'. print_r($account, TRUE) .'</pre>');
-
   $account = course_source_api_call('updateUser', array(
 	  $form_state['values']['name'], $account['FirstName'], 
 	  $account['LastName'], $email, $account['GroupName'], 
@@ -336,7 +242,6 @@ function _course_source_profile_alter_submit($form, &$form_state) {
 }
 
 function _course_source_login_validate($form, &$form_state) {
-	//drupal_set_message('validate me');
   $name = trim($form_state['values']['name']);
   $pass = trim($form_state['values']['pass']);
   if (!flood_is_allowed('failed_login_attempt_ip', variable_get('user_failed_login_ip_limit', 50), variable_get('user_failed_login_ip_window', 3600))) {
@@ -388,16 +293,6 @@ function _course_source_login_validate($form, &$form_state) {
 	  form_set_error('name', t('Sorry, %name is not recognized as a valid user, or the password does not match.', array('%name' => $name)));
 	}  
 }
-
-/* removed: account creation handled by custom login validate function
-function _course_source_login_submit($form, &$form_state) {
-  $name = trim($form_state['values']['name']);
-  drupal_set_message('<pre>'. print_r($form_state, TRUE) .'</pre>');
-	drupal_set_message('Logged in as: '. $name);
-  user_login_submit($form, &$form_state);
-}
-*/
-
 
 
 
