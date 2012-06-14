@@ -1,5 +1,12 @@
 <?php
 
+/**
+ *  Implementation of hook_init() to add module CSS styles
+ */
+function course_source_mycourses_init() {
+  drupal_add_css(drupal_get_path('module', 'course_source_mycourses') . '/css/course-source-mycourse.css');
+}
+
 function course_source_mycourses_permission() {
   return array(
     'access mycourses page' => array(
@@ -9,82 +16,367 @@ function course_source_mycourses_permission() {
   );
 }
 
-function course_source_mycourses_theme() {
-  return array(
-    'course_source_course_page' => array(
-      'variables' => array('href' => NULL),
-      'template' => 'course_source_course_page',
-    ),
-    'course_source_mycourses' => array(
-      'variables' => array('courses' => NULL),
-    ),
-  );
-}
-
-function theme_course_source_mycourses($variables) {
-  $table = array(
-    'header' => array('Course Title', 'Expiry Date', 'Last Accessed Date', 'Complete Status'),
-    'rows' => array(),
-  );
-  if (!empty($variables['courses'])) {
-    foreach ($variables['courses'] as $course) {
-      if ($course['CompleteStatus'] == 1) {
-        $tickorcross = '<div class="tick"></div>';
-      } else {
-        $tickorcross = '<div class="cross"></div>';
-      }
-      $table['rows'][] = array(
-        l($course['CourseTitle'], 'course-source/'. urlencode($course['CourseTitle']) .'/'. urlencode($course['LaunchURL'])),
-        '<div class="coursedate">'. $course['EndDate'] .'</div>', '<div class="coursedate">'. $course['LastAccessedDate'] .'</div>',
-        $tickorcross,
-      );
-    }
-  }
-  return theme('table', $table);
-}
-
 function course_source_mycourses_menu() {
   $items = array();
-  $items['mycourses'] = array(
-    'title' => t('My Courses'),
-    'description' => t('The courses I am enrolled in'),
-    'page callback' => '_course_source_mycourses_page',
-    'access arguments' => array('access mycourses page'),
-    'menu_name' => 'user-menu',
+  $items['admin/config/services/course-source/mycourses'] = array(
+    'title' => 'MyCourses settings',
+    'description' => 'Configure the Course Source MyCourses display',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('course_source_mycourses_settings'),
+    'access arguments' => array('administer course source'),
+    'file' => 'course_source_mycourses.admin.inc',
+    'type' => MENU_LOCAL_TASK,  
   );
   $items['course-source'] = array(
-    'title' => t('Course'),
-    'page callback' => '_course_source_course_page',
+    'title' => t('My courses'),
+    'page callback' => '_course_source_mycourse_list_page',
     'access arguments' => array('access mycourses page'),
+    'menu_name' => 'navigation', 
+    'type' => MENU_CALLBACK,
+  );
+  $items['course-source/%course_source_course'] = array(
+    'title' => t('View course'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('_course_source_mycourse_course_page', 1), 
+    'access arguments' => array('access mycourses page'),
+  );
+  $items['course-source/%course_source_course/%/%course_source_bandwidth/%ctools_js'] = array(
+    'title' => t('Display course'),
+    'page callback' => '_course_source_mycourse_display_course',
+    'page arguments' => array(1, 2, 3, 4),
+    'access arguments' => array('access mycourses page'),
+  );
+  $items['course-source/%/redirect'] = array(
+    'title' => t('Course source ajax redirect'),
+    'page callback' => '_course_source_mycourse_ajax_redirect',
+    'page arguments' => array(1),
+    'access arguments' => array('access content'),
     'type' => MENU_CALLBACK,
   );
   return $items;
 }
 
-
-function _course_source_mycourses_page() {
-  global $user;
-  return theme('course_source_mycourses', 
-    array('courses' => course_source_api_call('getMyCourses', array($user->name, ip_address()))));
+function course_source_mycourses_theme() {
+  return array(
+    'course_source_course_page' => array(
+      'variables' => array('enroll_id' => NULL),
+    ),
+    'course_source_mycourses' => array(
+      'variables' => array('uid' => NULL),
+    ),
+    'course_source_complete_status' => array(
+      'variables' => array('complete' => FALSE),
+    ),
+    'course_source_embed_tutorial' => array(
+      'variables' => array('link' => ''),
+    ),
+  );
 }
 
-function _course_source_course_page($title, $courselink) {
-  drupal_set_title(urldecode($title));
+/** 
+ *  Utility function that is used by Drupal's argument loading to turn an integer
+ *  enroll ID passed in via URL to a fully loaded Course array with enrollment data
+ */
+function course_source_course_load($enrol_id) {
   global $user;
-  drupal_set_breadcrumb(array(
-    l('Home', NULL), l(check_plain($user->name), 'user/'. $user->uid),
-    l('My Courses', 'mycourses')
+  // Use a static cache to improve performance of course loading
+  static $course_source_courses = array();
+  if (empty($course_source_courses[$user->name][$enrol_id])) {
+    $course_source_courses[$user->name][$enrol_id] = 
+      course_source_api_call('getMyCourseData', array($user->name, $enrol_id), 
+      variable_get('course_source_mycourses_cache', TRUE));
+  }
+  return $course_source_courses[$user->name][$enrol_id];
+}
+/** 
+ *  Utility function to turn bandwidth option passed in via URL to an appropriate
+ *  array key for embedding the tutorial in the modal window.
+ */
+function course_source_bandwidth_load($bandwidth_id) {
+  return ($bandwidth_id == 'low') ? 'LowBandwidthURL' : 'HighBandwidthURL';
+}
+
+/**
+ *  Page callback - used to generate the redirect back to course page 
+ *  after a tutorial has been closed.
+ */
+function _course_source_mycourse_ajax_redirect($course_id) {  
+  if (variable_get('course_source_mycourses_cache_clear', TRUE)) {
+    // Clear the course data from cache to force loading of updated progress
+    global $user;
+    course_source_api_cache_clear('getMyCourseData', array($user->name, $course_id));
+  }
+  // Generate link back to course page, and add Javascript to force refresh
+  $url = url('course-source/' . $course_id, array('absolute' => TRUE));
+  $link = l('click here', 'course-source/' . $course_id, array('attributes' => array('target' => '_top'))); 
+  $js = '<script>window.top.location.href = "' . $url . '";</script>';
+  print 'If you are not automatically redirected back to the course page please ' . $link . '.' . $js;
+}
+
+/**
+ *  Page callback - used to create the mycourses page that lists all courses 
+ *  a user has enrollment for.
+ */
+function _course_source_mycourse_list_page() {
+  global $user;
+  return theme('course_source_mycourses', array('uid' => $user->uid));
+}
+/**
+ *  Page callback - used to create the course page, listing all lessons and tutorials.
+ *  Creates links to open tutorials in modal window. 
+ */
+function _course_source_mycourse_course_page($form, $form_state, $course) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+  // custom modal window style
+  $modal_style = array(
+    'course-source-modal-style' => array(
+      'modalSize' => array(
+        'type' => variable_get('course_source_tutorial_modal_type', 'scale'),
+        'width' => floatval(variable_get('course_source_tutorial_modal_width', 0.95)),
+        'height' => floatval(variable_get('course_source_tutorial_modal_height', 0.95)),
+      ),
+      'modalOptions' => array(
+        'opacity' => .5,
+        'background-color' => '#000',
+      ),
+      'animation' => 'fadeIn',
+      'modalTheme' => 'CourseSourceModal',
+    ),
+  );
+
+  drupal_add_js($modal_style, 'setting');
+  ctools_add_js('course-source-modal', 'course_source_mycourses');
+
+  drupal_set_title($course['CourseTitle']);
+  $enroll_id = arg(1);
+  $form = array();
+  if (!empty($course['CourseOverview'])) {
+    $form['overview'] = array('#markup' => "<p>{$course['CourseOverview']}");
+  }  
+  $bandwidth_default = $course['HighBandwidth'];
+  if (isset($course['ShowBandwidthSelector']) && $course['ShowBandwidthSelector']) {
+    $form['bandwidth'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Show high bandwidth version'),
+      '#default_value' => ($bandwidth_default == 1) ? TRUE : FALSE,
+    );
+  }   
+  $rows = array();
+  foreach ($course['CourseLessons'] as $lesson) {
+    $rows[] = array(
+      array('data' => $lesson['LessonTitle'], 'colspan' => 3, 'header' => TRUE),
+    );
+    foreach ($lesson['LessonTutorials'] as $tutorial) {
+      $rows[] = array(
+        array(
+          'data' => ctools_modal_text_button(
+            $tutorial['TutorialTitle'], "course-source/$enroll_id/{$tutorial['TutorialID']}/low/nojs", 
+            t('Launch @name', array('@name' => $tutorial['TutorialTitle'])),  'ctools-modal-course-source-modal-style'),
+        ), 
+        array('data' => $tutorial['LastAccessed']),
+        array('data' => theme('course_source_complete_status', array('complete' => $tutorial['CompleteStatus'])))
+      );
+    }
+  }   
+  $form['lessons'] = array('#markup' => theme('table', array(
+    'header' => array(
+      t('Section / Lesson'), t('Status'), t('Completed'),
+    ),
+    'rows' => $rows,
+    'sticky' => TRUE,
+  )));
+  return $form;
+}
+
+/* Utility function that returns the tutorial data for a requested tutorial from a fully loaded course 
+   array with enrollment, FALSE is returned if tutorial is not found in course. */
+function _course_source_mycourse_get_tutorial($course, $tutorial_id) {
+  foreach ($course['CourseLessons'] as $lesson) {
+    foreach ($lesson['LessonTutorials'] as $tutorial) {
+      if ($tutorial['TutorialID'] == $tutorial_id) {
+        return $tutorial;
+      }
+    }
+  }
+  return FALSE;
+}
+
+/**
+ *  Function displays the modal window containing the tutorial iframe.
+ */
+function _course_source_mycourse_display_course($course, $tutorial_id, $bandwidth, $js = FALSE) {
+  $tutorial = _course_source_mycourse_get_tutorial($course, $tutorial_id);
+  $title = $tutorial['TutorialTitle'];
+  $output = theme('course_source_embed_tutorial', array('link' => $tutorial[$bandwidth], 'enroll_id' => arg(1)));
+  if ($js) { 
+    ctools_include('ajax');
+    ctools_include('modal');
+    $commands = array();
+    $commands[] = ctools_modal_command_display($title, $output);
+    print ajax_render($commands);
+  } else {
+    drupal_set_title($title);
+    print $output;
+  }
+}
+/**
+ *  Theme function that generates the iframe to embed in modal popup window.
+ */
+function theme_course_source_embed_tutorial($variables) {
+  $course_url = $variables['link'] . '&returnURL=' . url("course-source/{$variables['enroll_id']}/redirect", array('absolute' => TRUE));
+  return "<iframe src=\"{$course_url}\" frameborder=\"0\" height=\"100%\" marginheight=\"0\" marginwidth=\"0\" width=\"100%\"></iframe>";
+}
+
+/**
+ *  Utility theme function that displays a tick or cross for completed status.
+ */
+function theme_course_source_complete_status($variables) {
+  if (empty($variables['complete'])) {
+    return array(
+      '#markup' => '<div class="course-source-cross">&#9744;</div>',
+    );
+  } else {
+    return array(
+      '#markup' => '<div class="course-source-tick">&#9745;</div>',
+    );
+  }
+}
+
+/**
+ *  Theme function that displays the list of courses for the current user.  
+ *  This is used by the provided mycourses page, and field formatter.
+ */
+function theme_course_source_mycourses($variables) {
+  $account = user_load($variables['uid']);
+  $courses = course_source_api_call('getMyCourses', array($account->name, ip_address()), 
+    variable_get('course_source_mycourses_cache', TRUE));
+  $rows = array();
+  if (!empty($courses)) {
+    foreach ($courses as $course) {
+      $rows[] = array(
+        array(
+          'data' => l($course['CourseTitle'], "course-source/{$course['EnrollID']}"),
+        ),
+        array(
+          'data' => $course['EndDate'],
+        ),
+        array(
+          'data' => $course['LastAccessedDate'],
+        ),
+        array(
+          'data' => theme('course_source_complete_status', array('complete' => $course['CompleteStatus'])),
+        ),
+      );
+    }
+  }
+  return array(
+    '#theme' => 'table',
+    '#header' => array(
+      t('Title'), t('Expiry Date'), t('Last Accessed Date'), t('Complete Status'),
+    ),
+    '#rows' => $rows,
+    '#sticky' => TRUE,
+    '#empty' => t('You are not enrolled on any courses.'),
+  );
+}
+
+/**
+ *  Provides a field formatter to display course information for a user
+ */
+function course_source_mycourses_field_formatter_info() {
+  return array(
+    'course_source_mycourses' => array(
+      'label' => t('MyCourses'),
+      'field types' => array('course_source_mycourses', 'text'),
+    ),
+  );
+}
+function course_source_mycourses_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  //debug($display);
+  switch ($display['type']) {
+    case 'course_source_mycourses':
+      $element[0] = _course_source_mycourse_list_page();
+      break;
+  }
+  //debug($element);
+  return $element;
+}
+
+/**
+ * Implements hook_field_info().
+ */
+function course_source_mycourses_field_info() {
+  return array(
+    'course_source_mycourses' => array(
+      'label' => t('MyCourses'),
+      'description' => t("This field displays the current user's courses."),
+      'settings' => array(),
+      'instance_settings' => array('empty_text' => t('Login to view your courses')),
+      'default_widget' => 'course_source_mycourses_text',
+      'default_formatter' => 'course_source_mycourses',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_schema().
+ */
+function course_source_mycourses_field_schema($field) {
+  // stores nothing.
+  return array('columns' => array(
+    'format' => array(
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+    ),
   ));
-  return theme('course_source_course_page', array('href' => 'http://'. urldecode($courselink)));
+}
+
+/**
+ * Implements hook_field_validate().
+ */
+function course_source_mycourses_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+  // always validates, stores nothing.
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function course_source_mycourses_field_is_empty($item, $field) {
+  // it's never empty, we always want to display the formatter output
+  return FALSE;
 }
 
 
+/**
+ * Implements hook_field_widget_info().
+ */
+function course_source_mycourses_field_widget_info() {
+  return array(
+    'course_source_mycourses_text' => array(
+      'label' => t('MyCourses'),
+      'field types' => array('course_source_mycourses'),
+      'settings' => array('empty_text' => t('Login to view your courses')),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        'default value' => FIELD_BEHAVIOR_DEFAULT,
+      ),
+    ),
+  );
+}
 
-
-
-
-
-
+/**
+ * Implements hook_field_widget_form().
+ */
+function course_source_mycourses_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $element = array(
+    '#markup' => "MyCourse field displays the current user's courses",
+  );
+  return $element;
+}
 
 
 

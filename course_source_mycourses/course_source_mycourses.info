@@ -2,6 +2,7 @@ name = Course Source MyCourses
 package = Course Source
 description = Provides a MyCourses page for each user listing their enrollments.
 dependencies[] = course_source_api
+dependencies[] = ctools
 
 core = 7.x
 

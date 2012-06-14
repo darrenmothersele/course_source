@@ -1,0 +1,8 @@
+
+.course-source-tick {
+	background: url(tick.png) no-repeat;
+	text-indent: -9999px;
+	display: inline-block;
+	width: 14px;
+	height: 12px;
+}
