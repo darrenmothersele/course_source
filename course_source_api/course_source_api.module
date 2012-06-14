@@ -163,6 +163,10 @@ function course_source_api_cache_clear($op, $args = array()) {
 
 
 function course_source_api_user_presave(&$edit, $account, $category) {
+	if ($account->uid == 1) {
+		// Allow UID 1 to change username
+		return;
+	}
   if ($edit['name'] != $account->name) {
     drupal_set_message(t('Sorry, editing usernames is not supported.'), 'error');
     $edit['name'] = $account->name;
