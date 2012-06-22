@@ -62,7 +62,7 @@ function course_source_mycourses_theme() {
       'variables' => array('enroll_id' => NULL),
     ),
     'course_source_mycourses' => array(
-      'variables' => array('uid' => NULL),
+      'variables' => array('uid' => NULL, 'empty_text' => ''),
     ),
     'course_source_complete_status' => array(
       'variables' => array('complete' => FALSE),
@@ -72,6 +72,34 @@ function course_source_mycourses_theme() {
     ),
   );
 }
+
+/**
+ * Implements hook_block_info().
+ */
+function course_source_mycourses_block_info() {
+  $blocks['mycourses'] = array(
+    'info' => t('MyCourses'),
+    'cache' => DRUPAL_CACHE_PER_USER,
+  );
+  return $blocks;
+}
+/**
+ * Implements hook_block_view().
+ */
+function course_source_mycourses_block_view($delta = '') {
+  $block = array();
+  switch ($delta) {
+    case 'mycourses':
+      global $user;
+      $block['subject'] = t('MyCourses');
+      $block['content'] = theme('course_source_mycourses', array('uid' => $user->uid));
+      break;
+  }
+  return $block;
+}
+
+
+
 
 /** 
  *  Utility function that is used by Drupal's argument loading to turn an integer
@@ -117,9 +145,9 @@ function _course_source_mycourse_ajax_redirect($course_id) {
  *  Page callback - used to create the mycourses page that lists all courses 
  *  a user has enrollment for.
  */
-function _course_source_mycourse_list_page() {
+function _course_source_mycourse_list_page($empty_text = '') {
   global $user;
-  return theme('course_source_mycourses', array('uid' => $user->uid));
+  return theme('course_source_mycourses', array('uid' => $user->uid, 'empty_text' => $empty_text));
 }
 /**
  *  Page callback - used to create the course page, listing all lessons and tutorials.
@@ -292,6 +320,7 @@ function theme_course_source_mycourses($variables) {
       );
     }
   }
+  $empty_text = (!empty($variables['empty_text'])) ? $variables['empty_text'] : t('You are not enrolled on any courses.');
   return array(
     '#theme' => 'table',
     '#header' => array(
@@ -316,10 +345,10 @@ function course_source_mycourses_field_formatter_info() {
 }
 function course_source_mycourses_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
   $element = array();
-  //debug($display);
+  //debug($items);
   switch ($display['type']) {
     case 'course_source_mycourses':
-      $element[0] = _course_source_mycourse_list_page();
+      $element[0] = _course_source_mycourse_list_page($items[0]['safe_value']);
       break;
   }
   //debug($element);

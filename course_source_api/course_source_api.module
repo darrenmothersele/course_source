@@ -79,19 +79,19 @@ function _course_source_api_get_users() {
 function _course_source_api_get_connection() {
   static $course_source_service;
   if (empty($course_source_service)) {
-	  if (variable_get('course_source_api_version', 'json.1') == 'rpc') {
+    if (variable_get('course_source_api_version', 'json.1') == 'rpc') {
       require_once drupal_get_path('module', 'course_source_api') .'/lib/nusoap.php';
       $client = new nusoap_client(variable_get('course_source_endpoint', 
         'http://beta.course-source.net/ws/AutoLogin-rpc.php') .'?wsdl', 'wsdl');
       $course_source_service = $client->getProxy();
-	  } else if (variable_get('course_source_api_version', 'json.1') == 'json.1') {
-	    require_once drupal_get_path('module', 'course_source_api') .'/lib/jsonrpcphp/includes/jsonRPCClient.php';
-	    $course_source_service = new jsonRPCClient(variable_get('course_source_endpoint',
-	      'http://beta.course-source.net/ws/AutoLogin-rpc.php'));
-	  } else {
+    } else if (variable_get('course_source_api_version', 'json.1') == 'json.1') {
+      require_once drupal_get_path('module', 'course_source_api') .'/lib/jsonrpcphp/includes/jsonRPCClient.php';
+      $course_source_service = new jsonRPCClient(variable_get('course_source_endpoint',
+        'http://beta.course-source.net/ws/AutoLogin-rpc.php'));
+    } else {
       watchdog('course_source_api', 'Error creating Course Source API client, unknown API version', 
         array(), WATCHDOG_ERROR);
-	  }
+    }
     if (!$course_source_service) {
       watchdog('course_source_api', 'Error creating Course Source API client.', 
         array(), WATCHDOG_ERROR);
@@ -115,22 +115,22 @@ function _course_source_api_get_connection() {
  *   the API is always called to fetch new values.
  */
 function course_source_api_call($op, $args = array(), $cache = FALSE) {
-	if (variable_get('course_source_debug', FALSE)) {
-		watchdog('course_source_api', 'Calling API method %op with: %args',
-		  array('%op' => $op, '%args' => print_r($args, TRUE)));
-	}
-	$cache_key = "course_source_{$op}_" . md5(serialize($args));
-	if ($cache) {
-		$cache_data = cache_get($cache_key);
-		if (!empty($cache_data) && isset($cache_data->data)) {
-		  if (variable_get('course_source_debug', FALSE)) {
-			  watchdog('course_source_api', 'API result fetched from cache: %msg',
-			    array('%msg' => print_r($cache_data->data, TRUE)));
-		  }
-			return $cache_data->data;
-		} 
-	}
-	$client = _course_source_api_get_connection();
+  if (variable_get('course_source_debug', FALSE)) {
+    watchdog('course_source_api', 'Calling API method %op with: %args',
+      array('%op' => $op, '%args' => print_r($args, TRUE)));
+  }
+  $cache_key = "course_source_{$op}_" . md5(serialize($args));
+  if ($cache) {
+    $cache_data = cache_get($cache_key);
+    if (!empty($cache_data) && isset($cache_data->data)) {
+      if (variable_get('course_source_debug', FALSE)) {
+        watchdog('course_source_api', 'API result fetched from cache: %msg',
+          array('%msg' => print_r($cache_data->data, TRUE)));
+      }
+      return $cache_data->data;
+    } 
+  }
+  $client = _course_source_api_get_connection();
   $keys = array(variable_get('course_source_siteid', ''), 
     variable_get('course_source_sitekey', ''));
   $ops_without_userid = array('validateLogin', 'getAllCoursesAndDurations', 'getAllCourses', 'getDurations');
@@ -140,33 +140,34 @@ function course_source_api_call($op, $args = array(), $cache = FALSE) {
     $userid = array_shift($args);
     $args = array_merge(array($userid), $keys, $args);
   }
-	try {
-	  $response = call_user_func_array(array($client, $op), $args);
-	  if (variable_get('course_source_debug', FALSE)) {
-		  watchdog('course_source_api', 'API responded with: %msg',
-		    array('%msg' => print_r($response, TRUE)));
-	  }
-	  cache_set($cache_key, $response);
-	  return $response;
-	} catch (Exception $e) {
-		$msg = $e->getMessage();
-		watchdog('course_source_api', 'Error when calling Course Source API: %error',
-		  array('%code' => $msg['code'], '%error' => $msg), WATCHDOG_ERROR);
-		return FALSE;
-	}
+  try {
+    $response = call_user_func_array(array($client, $op), $args);
+    if (variable_get('course_source_debug', FALSE)) {
+      watchdog('course_source_api', 'API responded with: %msg',
+        array('%msg' => print_r($response, TRUE)));
+    }
+    cache_set($cache_key, $response);
+    return $response;
+  } catch (Exception $e) {
+    $msg = $e->getMessage();
+    watchdog('course_source_api', 'Error when calling Course Source API: %error',
+      array('%code' => $msg['code'], '%error' => $msg), WATCHDOG_ERROR);
+    return FALSE;
+  }
 }
  
 function course_source_api_cache_clear($op, $args = array()) {
   $cache_key = "course_source_{$op}_" . md5(serialize($args));
-	cache_clear_all($cache_key, 'cache');
+  cache_clear_all($cache_key, 'cache');
 }
 
 
 function course_source_api_user_presave(&$edit, $account, $category) {
-	if (variable_get('course_source_admin_change_username', TRUE) && isset($account->uid) && $account->uid == 1) {
-		// Allow UID 1 to change Drupal username
-		return;
-	}
+  //debug($account);
+  if (variable_get('course_source_admin_change_username', TRUE) && isset($account->uid) && $account->uid == 1) {
+    // Allow UID 1 to change Drupal username
+    return;
+  }
   if ($edit['name'] != $account->name) {
     drupal_set_message(t('Sorry, editing usernames is not supported.'), 'error');
     $edit['name'] = $account->name;
@@ -183,25 +184,35 @@ function course_source_api_user_update(&$edit, $account, $category) {
   }
 } 
 
+
 function _course_source_api_map_user($account) {
+  global $form_state_pass;
   $groupname = _course_source_api_map_user_field($account, 'groupname');
   if (!$groupname) {
-	  $groupname = variable_get('course_source_default_group_name', 'Students');
+    $groupname = variable_get('course_source_default_group_name', 'Students');
   }
-  return array(
+  $output = array(
     $account->name,
     _course_source_api_map_user_field($account, 'firstname'),
     _course_source_api_map_user_field($account, 'lastname'),
     $account->mail,
     $groupname,
     $account->status,
+    //password
+    //subsiteid
+    //bandwidth
   );
+  if (!empty($form_state_pass)) {
+    $output[] = $form_state_pass;
+    unset($form_state_pass);
+  }
+  return $output;
 }
 
 function _course_source_api_map_user_field($account, $field) {
   $field_name = variable_get("course_source_mapping_{$field}", 0);
   $field_value = '';
-  if ($field_name) {
+  if ($field_name && $field_name != '0') {
     $field_array = field_get_items('user', $account, $field_name);
     if (isset($field_array[0]['value'])) {
       $field_value = $field_array[0]['value'];
@@ -223,26 +234,54 @@ function course_source_api_get_courses() {
 }
 
 function course_source_api_form_alter(&$form, &$form_state, $form_id) {
-	if ($form_id == 'user_login_block') {
-		$form['#validate'] = array(
-		  'user_login_name_validate', 
-		  '_course_source_login_validate', 
-		  'user_login_final_validate',
-		);
-	}
-	if ($form_id == 'user_profile_form') {
-		$form['#submit'][] = '_course_source_profile_alter_submit';
-	}
+  if ($form_id == 'user_login_block') {
+    $form['#validate'] = array(
+      'user_login_name_validate', 
+      '_course_source_login_validate', 
+      'user_login_final_validate',
+    );
+  }
+  if ($form_id == 'user_profile_form') {
+	  // Before showing the user profile edit form load up new values from API
+    _course_source_update_user_from_api($form_state['user']);
+    foreach (_course_source_get_user_mappings() as $mapped_field) {
+	    if (!empty($mapped_field) && $mapped_field != '0') {
+		    $form[$mapped_field][LANGUAGE_NONE][0]['value']['#default_value'] = 
+		      $form_state['user']->{$mapped_field}[LANGUAGE_NONE][0]['value'];
+		  }
+    }
+    $form['#submit'] = array(
+      '_course_source_profile_alter_submit',
+      'user_profile_form_submit',
+    );
+  }
+}
+function _course_source_profile_alter_submit($form, &$form_state) {
+  // save the unencoded password
+  global $form_state_pass;
+  $form_state_pass = $form_state['values']['pass'];
 }
 
-function _course_source_profile_alter_submit($form, &$form_state) {
-  $new_pass = $form_state['values']['pass'];
-  $email = $form_state['values']['mail'];
-  $account = course_source_api_call('getUser', array($form_state['values']['name']));
-  $account = course_source_api_call('updateUser', array(
-	  $form_state['values']['name'], $account['FirstName'], 
-	  $account['LastName'], $email, $account['GroupName'], 
-	  $account['ActiveStatus'], $new_pass, $account['SubSiteID']));
+function _course_source_get_user_mappings() {
+  $mappings = array( 
+    'FirstName' => variable_get('course_source_mapping_firstname', 0),
+    'LastName' => variable_get('course_source_mapping_lastname', 0),
+    'GroupName' => variable_get('course_source_mapping_groupname', 0),
+    'SubSiteID' => variable_get('course_source_mapping_subsite', 0),
+  );
+  return $mappings;
+}
+
+function _course_source_update_user_from_api(&$account, $cs_user = NULL, $cache = FALSE) {
+  // if we are not provided a CS user, fetch it from API
+  if ($cs_user == NULL) {
+    $cs_user = course_source_api_call('getUser', array($account->name), $cache);
+  }
+  foreach (_course_source_get_user_mappings() as $csfield => $userfield) {
+    if (!empty($userfield) && $userfield != '0') {
+      $account->{$userfield}[LANGUAGE_NONE][0]['value'] = $cs_user[$csfield];
+    }
+  }
 }
 
 function _course_source_login_validate($form, &$form_state) {
@@ -255,47 +294,41 @@ function _course_source_login_validate($form, &$form_state) {
   if (!empty($name) && !empty($pass)) {
     $form_state['uid'] = user_authenticate($name, $pass);
     if ($form_state['uid'] == 1) {
-		return;
+    return;
     } else {
-		unset($form_state['uid']);
+    unset($form_state['uid']);
     }
-	  $user = course_source_api_call('validateLogin', array($name, $pass));
-	  if (isset($user['ActiveStatus']) && $user['ActiveStatus']) {
-		  // create local user if required and set user settings and $form_state['uid']
-		  $account = user_load_by_name($name);
-		  if ($account) {
-			  // the user was created already, update their Drupal details from the Course Source db
-			  $account->name = $name;
-			  $account->mail = $user['Email'];
-			  $account->field_firstname[LANGUAGE_NONE][0]['value'] = $user['FirstName'];
-			  $account->field_lastname[LANGUAGE_NONE][0]['value'] = $user['LastName'];
-			  $account->field_subsite_id[LANGUAGE_NONE][0]['value'] = $user['SubSiteID'];
-			  $account->field_groupname[LANGUAGE_NONE][0]['value'] = $user['GroupName'];
-			  user_save($account, array(
-				'name' => $name,
-			  	'pass' => $pass
-			  ));
-		  } else {
-			  // create the Drupal user with details from the Course Source db
-			  $account->name = $name;
-			  $account->mail = $user['Email'];
-			  $account->field_firstname[LANGUAGE_NONE][0]['value'] = $user['FirstName'];
-			  $account->field_lastname[LANGUAGE_NONE][0]['value'] = $user['LastName'];
-			  $account->field_subsite_id[LANGUAGE_NONE][0]['value'] = $user['SubSiteID'];
-			  $account->field_groupname[LANGUAGE_NONE][0]['value'] = $user['GroupName'];
-			  user_save($account, array(
-				'name' => $name,
-				'pass' => $pass,
-				'status' => 1,
-				'init' => $user['Email']
-			  ));
-		  }
-		  $form_state['uid'] = $account->uid;
-		  return;
-	  }
-	  //drupal_set_message('<pre>'. print_r($user, TRUE) .'</pre>');
-	  form_set_error('name', t('Sorry, %name is not recognized as a valid user, or the password does not match.', array('%name' => $name)));
-	}  
+    $cs_user = course_source_api_call('validateLogin', array($name, $pass));
+    if (isset($cs_user['ActiveStatus']) && $cs_user['ActiveStatus']) {
+      // create local user if required and set user settings and $form_state['uid']
+      $account = user_load_by_name($name);
+      if ($account) {
+        // the user was created already, update their Drupal details from the Course Source db
+        $account->name = $name;
+        $account->mail = $cs_user['Email'];
+        _course_source_update_user_from_api($account, $cs_user);
+        user_save($account, array(
+          'name' => $name,
+          'pass' => $pass
+        ));
+      } else {
+        // create the Drupal user with details from the Course Source db
+        $account->name = $name;
+        $account->mail = $cs_user['Email'];
+        _course_source_update_user_from_api($account, $cs_user);
+        user_save($account, array(
+          'name' => $name,
+          'pass' => $pass,
+          'status' => 1,
+          'init' => $cs_user['Email']
+        ));
+      }
+      $form_state['uid'] = $account->uid;
+      return;
+    }
+    //drupal_set_message('<pre>'. print_r($user, TRUE) .'</pre>');
+    form_set_error('name', t('Sorry, %name is not recognized as a valid user, or the password does not match.', array('%name' => $name)));
+  }  
 }
 
 

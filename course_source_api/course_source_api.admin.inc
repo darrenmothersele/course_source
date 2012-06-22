@@ -38,7 +38,7 @@ function course_source_api_admin_settings() {
    	'#title' => t('Allow admin to change own username'),
 		'#description' => t('When using user Synchronisation a username must be changed in the master system. Select this to allow UID 1 to be able to change their Drupal username.'),
 		'#default_value' => variable_get('course_source_admin_change_username', TRUE),
-  ),
+  );
   $form['course_source_default_group_name'] = array(
     '#type' => 'textfield',
     '#title' => t('Course Source default group name'),
@@ -85,6 +85,13 @@ function course_source_api_admin_mappings() {
       '#description' => t('Select the user field to map to the Course Source GroupName field.'),
       '#options' => $field_options,
       '#default_value' => variable_get('course_source_mapping_groupname', 0),
+    );
+    $form['course_source_mapping_subsite'] = array(
+      '#type' => 'select',
+      '#title' => t('Subsite ID'),
+      '#description' => t('Select the user field to map to the Course Source SubSiteID field.'),
+      '#options' => $field_options,
+      '#default_value' => variable_get('course_source_mapping_subsite', 0),
     );
     return system_settings_form($form);
   } else {
