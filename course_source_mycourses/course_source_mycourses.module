@@ -131,21 +131,20 @@ function _course_source_mycourse_course_page($form, $form_state, $course) {
   ctools_modal_add_js();
   // custom modal window style
   $modal_style = array(
-    'course-source-modal-style' => array(
+    'course-source-modal-style-default' => array(
       'modalSize' => array(
         'type' => variable_get('course_source_tutorial_modal_type', 'scale'),
         'width' => floatval(variable_get('course_source_tutorial_modal_width', 0.95)),
         'height' => floatval(variable_get('course_source_tutorial_modal_height', 0.95)),
       ),
       'modalOptions' => array(
-        'opacity' => .5,
-        'background-color' => '#000',
+        'opacity' => variable_get('course_source_tutorial_modal_opacity', 0.5),
+        'background-color' => '#' . variable_get('course_source_tutorial_modal_background', '000000'),
       ),
       'animation' => 'fadeIn',
       'modalTheme' => 'CourseSourceModal',
     ),
   );
-
   drupal_add_js($modal_style, 'setting');
   ctools_add_js('course-source-modal', 'course_source_mycourses');
 
@@ -164,16 +163,38 @@ function _course_source_mycourse_course_page($form, $form_state, $course) {
     );
   }   
   $rows = array();
+  $lesson_number = 0;
   foreach ($course['CourseLessons'] as $lesson) {
     $rows[] = array(
       array('data' => $lesson['LessonTitle'], 'colspan' => 3, 'header' => TRUE),
     );
     foreach ($lesson['LessonTutorials'] as $tutorial) {
+	    $lesson_number += 1;
+	    $modal_style_key = 'ctools-modal-course-source-modal-style-default';
+	    if (!empty($lesson['optimalWidth']) && !empty($lesson['optimalHeight'])) {
+		    $modal_style_key = "ctools-modal-course-source-modal-style-{$lesson_number}";
+		    $modal_style = array(
+			    $modal_style_key = array(
+			      'modalSize' => array(
+			        'type' => 'fixed',
+			        'width' => floatval($lesson['optimalWidth']),
+			        'height' => floatval($lesson['optimalHeight']),
+			      ),
+			      'modalOptions' => array(
+			        'opacity' => variable_get('course_source_tutorial_modal_opacity', 0.5),
+			        'background-color' => '#' . variable_get('course_source_tutorial_modal_background', '000000'),
+			      ),
+			      'animation' => 'fadeIn',
+			      'modalTheme' => 'CourseSourceModal',
+			    ),
+			  );
+			  drupal_add_js($modal_style, 'setting');
+	    }
       $rows[] = array(
         array(
           'data' => ctools_modal_text_button(
             $tutorial['TutorialTitle'], "course-source/$enroll_id/{$tutorial['TutorialID']}/low/nojs", 
-            t('Launch @name', array('@name' => $tutorial['TutorialTitle'])),  'ctools-modal-course-source-modal-style'),
+            t('Launch @name', array('@name' => $tutorial['TutorialTitle'])), $modal_style_key),
         ), 
         array('data' => $tutorial['LastAccessed']),
         array('data' => theme('course_source_complete_status', array('complete' => $tutorial['CompleteStatus'])))
@@ -289,7 +310,7 @@ function course_source_mycourses_field_formatter_info() {
   return array(
     'course_source_mycourses' => array(
       'label' => t('MyCourses'),
-      'field types' => array('course_source_mycourses', 'text'),
+      'field types' => array('text'),
     ),
   );
 }
@@ -304,81 +325,6 @@ function course_source_mycourses_field_formatter_view($entity_type, $entity, $fi
   //debug($element);
   return $element;
 }
-
-/**
- * Implements hook_field_info().
- */
-function course_source_mycourses_field_info() {
-  return array(
-    'course_source_mycourses' => array(
-      'label' => t('MyCourses'),
-      'description' => t("This field displays the current user's courses."),
-      'settings' => array(),
-      'instance_settings' => array('empty_text' => t('Login to view your courses')),
-      'default_widget' => 'course_source_mycourses_text',
-      'default_formatter' => 'course_source_mycourses',
-    ),
-  );
-}
-
-/**
- * Implements hook_field_schema().
- */
-function course_source_mycourses_field_schema($field) {
-  // stores nothing.
-  return array('columns' => array(
-    'format' => array(
-      'type' => 'int',
-      'unsigned' => TRUE,
-      'not null' => FALSE,
-    ),
-  ));
-}
-
-/**
- * Implements hook_field_validate().
- */
-function course_source_mycourses_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
-  // always validates, stores nothing.
-}
-
-/**
- * Implements hook_field_is_empty().
- */
-function course_source_mycourses_field_is_empty($item, $field) {
-  // it's never empty, we always want to display the formatter output
-  return FALSE;
-}
-
-
-/**
- * Implements hook_field_widget_info().
- */
-function course_source_mycourses_field_widget_info() {
-  return array(
-    'course_source_mycourses_text' => array(
-      'label' => t('MyCourses'),
-      'field types' => array('course_source_mycourses'),
-      'settings' => array('empty_text' => t('Login to view your courses')),
-      'behaviors' => array(
-        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
-        'default value' => FIELD_BEHAVIOR_DEFAULT,
-      ),
-    ),
-  );
-}
-
-/**
- * Implements hook_field_widget_form().
- */
-function course_source_mycourses_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
-  $element = array(
-    '#markup' => "MyCourse field displays the current user's courses",
-  );
-  return $element;
-}
-
-
 
 
 

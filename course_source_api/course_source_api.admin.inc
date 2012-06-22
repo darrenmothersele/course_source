@@ -33,6 +33,12 @@ function course_source_api_admin_settings() {
     '#description' => t('Select this box to automatically create user accounts on Course Source when the user is added to Drupal.'),
     '#default_value' => variable_get('course_source_user_sync', TRUE),
   );
+  $form['course_source_admin_change_username'] = array(
+  	'#type' => 'checkbox',
+   	'#title' => t('Allow admin to change own username'),
+		'#description' => t('When using user Synchronisation a username must be changed in the master system. Select this to allow UID 1 to be able to change their Drupal username.'),
+		'#default_value' => variable_get('course_source_admin_change_username', TRUE),
+  ),
   $form['course_source_default_group_name'] = array(
     '#type' => 'textfield',
     '#title' => t('Course Source default group name'),

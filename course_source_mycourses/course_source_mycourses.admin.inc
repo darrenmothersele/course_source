@@ -27,7 +27,25 @@ function course_source_mycourses_settings() {
 		'#collapsible' => TRUE,
 		'#collapsed' => FALSE,
 		'#title' => t('Tutorial modal window settings'),
-	);
+		'#description' => t('These settings are used when the Course Source API does not return an optimal size and width for the popup lesson modal window.'),
+ 	);
+
+  $form['course_source_tutorial_modal']['course_source_tutorial_modal_opacity'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Background opacity'),
+    '#size' => 5,
+    '#description' => t('Specify the opacity of the background of the modal popup window.'),
+    '#default_value' => variable_get('course_source_tutorial_modal_opacity', 0.5),
+  );
+  $form['course_source_tutorial_modal']['course_source_tutorial_modal_background'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Background colour'),
+    '#size' => 5,
+    '#field_prefix' => '#',
+    '#description' => t('Specify the colour of the modal popup window background as a hex value.'),
+    '#default_value' => variable_get('course_source_tutorial_modal_background', '000000'),
+  );
+
 	$form['course_source_tutorial_modal']['course_source_tutorial_modal_type'] = array(
 		'#type' => 'select',
 		'#title' => t('Type'),
